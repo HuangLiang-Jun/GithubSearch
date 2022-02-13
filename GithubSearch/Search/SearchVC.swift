@@ -134,7 +134,6 @@ class SearchVC: UIViewController {
 // MARK: - UICollectionViewDelegate
 extension SearchVC: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        guard viewModel.output.nextPage.value != nil else { return }
         if indexPath.row == viewModel.output.users.value.count - 1 {
             viewModel.getNextPage()
         }

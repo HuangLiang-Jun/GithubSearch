@@ -9,7 +9,7 @@ import Foundation
 import RxCocoa
 import RxSwift
 
-class SearchVM: ViewModelType {
+class SearchVM: ViewModelType, SearchApi {
     
     struct Input {
         let keyword: AnyObserver<String>
@@ -32,7 +32,7 @@ class SearchVM: ViewModelType {
     private let showError = PublishSubject<String>()
     private let isLoading = BehaviorRelay(value: false)
     private let users: BehaviorRelay<[UserModel]> = BehaviorRelay(value: [])
-    private let nextPage: BehaviorRelay<Int?> = BehaviorRelay(value: nil)
+    private let nextPage: BehaviorRelay<Int?> = BehaviorRelay(value: 1)
     private let disposeBag = DisposeBag()
     
     private var keyword: String = ""
@@ -45,7 +45,10 @@ class SearchVM: ViewModelType {
                         showError: showError.asDriver(onErrorJustReturn: "unknow error"),
                         isLoading: isLoading.asDriver(onErrorJustReturn: false),
                         loadingState: isLoading)
+        hasNextPage = true
+        currentPage = 1
         bind()
+        
     }
     
     private func bind() {
@@ -59,7 +62,7 @@ class SearchVM: ViewModelType {
         guard !keyword.isEmpty else { return }
         isLoading.accept(true)
         output.nextPage.accept(1)
-        SearchApi.searchUser(key: keyword) { [weak self] data, hasNext, error in
+        self.searchUsers(key: keyword, page: nextPage.value ?? 1) { [weak self] data, hasNext, error in
             guard let self = self else { return }
             self.isLoading.accept(false)
             if let error = error {
@@ -74,8 +77,8 @@ class SearchVM: ViewModelType {
     }
     
     func getNextPage() {
-        guard !keyword.isEmpty else { return }
-        SearchApi.searchUser(key: keyword, page: nextPage.value!) { [weak self] data, hasNext, error in
+        guard !keyword.isEmpty, nextPage.value != nil else { return }
+        self.searchUsers(key: keyword, page: nextPage.value!) { [weak self] data, hasNext, error in
             guard let self = self else { return }
             if let error = error {
                 self.errorHandler(errorMsg: error.localizedDescription)

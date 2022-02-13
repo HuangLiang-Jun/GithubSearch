@@ -6,9 +6,12 @@
 //
 
 import Foundation
+protocol SearchApi {
+    func searchUsers(key: String, page: Int, complectiom: @escaping (_ data: [UserModel]?, _ nextPage: Bool,_ error: Error?) -> Void)
+}
 
-class SearchApi {
-    static func searchUser(key: String, page: Int = 1, complectiom: @escaping (_ data: [UserModel]?, _ nextPage: Bool, _ error: Error?) -> ()) {
+extension SearchApi {
+    func searchUsers(key: String, page: Int, complectiom: @escaping (_ data: [UserModel]?, _ nextPage: Bool, _ error: Error?) -> ()) {
         let apiKey = SearchApiKey(.User)
         let parameter: [String: Any] = ["q": "\(key)+in:login",
                                         "page": page]
