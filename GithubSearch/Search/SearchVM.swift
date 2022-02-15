@@ -19,7 +19,7 @@ class SearchVM: ViewModelType, SearchApi {
         let reloadData: Driver<Void>
         let users: BehaviorRelay<[UserModel]>
         let nextPage: BehaviorRelay<Int?>
-        let showError: Driver<String>
+        let showError: Signal<String>
         let isLoading: Driver<Bool>
         let loadingState: BehaviorRelay<Bool>
     }
@@ -42,16 +42,19 @@ class SearchVM: ViewModelType, SearchApi {
         output = Output(reloadData: reloadData.asDriver(onErrorJustReturn: ()),
                         users: users,
                         nextPage: nextPage,
-                        showError: showError.asDriver(onErrorJustReturn: "unknow error"),
+                        showError: showError.asSignal(onErrorJustReturn: "unknown error"),
                         isLoading: isLoading.asDriver(onErrorJustReturn: false),
                         loadingState: isLoading)
-        hasNextPage = true
-        currentPage = 1
         bind()
-        
     }
     
     private func bind() {
+        users
+            .bind(onNext: { [weak self] _ in
+                self?.reloadData.onNext(())
+            })
+            .disposed(by: disposeBag)
+        
         keywordObserve
             .subscribe(onNext: { [weak self] text in
                 self?.keyword = text
@@ -61,7 +64,7 @@ class SearchVM: ViewModelType, SearchApi {
     func searchUser() {
         guard !keyword.isEmpty else { return }
         isLoading.accept(true)
-        output.nextPage.accept(1)
+        nextPage.accept(1)
         self.searchUsers(key: keyword, page: nextPage.value ?? 1) { [weak self] data, hasNext, error in
             guard let self = self else { return }
             self.isLoading.accept(false)
@@ -70,9 +73,8 @@ class SearchVM: ViewModelType, SearchApi {
                 return
             }
             guard let data = data else { return }
-            self.output.users.accept(data)
+            self.users.accept(data)
             self.updateNextpage(hasNext: hasNext)
-            self.reloadData.onNext(())
         }
     }
     
@@ -85,24 +87,22 @@ class SearchVM: ViewModelType, SearchApi {
                 return
             }
             guard let data = data else { return }
-            self.output.users.accept(self.output.users.value + data)
+            self.users.accept(self.users.value + data)
             self.updateNextpage(hasNext: hasNext)
-            self.reloadData.onNext(())
         }
     }
     
     private func updateNextpage(hasNext: Bool) {
-        guard hasNext, let nextpage = output.nextPage.value else {
-            output.nextPage.accept(nil)
+        guard hasNext, let nextpage = nextPage.value else {
+            nextPage.accept(nil)
             return
         }
-        output.nextPage.accept(nextpage + 1)
+        nextPage.accept(nextpage + 1)
     }
     
     private func errorHandler(errorMsg: String) {
         showError.onNext(errorMsg)
-        output.users.accept([])
+        users.accept([])
         updateNextpage(hasNext: false)
-        reloadData.onNext(())
     }
 }

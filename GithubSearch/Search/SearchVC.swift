@@ -118,7 +118,7 @@ class SearchVC: UIViewController {
 
         viewModel.output
             .showError
-            .drive(onNext: { [weak self] errorMsg in
+            .emit(onNext: { [weak self] errorMsg in
                 self?.showErrorAlert(message: errorMsg)
             }).disposed(by: disposeBag)
     }
