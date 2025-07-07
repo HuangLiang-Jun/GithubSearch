@@ -51,8 +51,8 @@ class UserCell: UICollectionViewCell {
         }
     }
     
-    func configure(with user: UserModel) {
-        avatarImageView.sd_setImage(with: user.avatarURL)
+    func configure(with user: User) {
+        avatarImageView.sd_setImage(with: user.avatarUrl)
         nameLabel.text = user.name
     }
 }

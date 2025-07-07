@@ -7,25 +7,18 @@
 
 import Foundation
 
-struct UsersModel: Codable {
-    let items: [UserModel]
-}
-
-struct UserModel: Codable {
+struct User: Hashable, Codable {
+    let id: Int
     let name: String
     private let avatarUrlString: String
     
-    var avatarURL: URL? {
+    var avatarUrl: URL? {
         return URL(string: avatarUrlString)
     }
     
     enum CodingKeys: String, CodingKey {
+        case id
         case name = "login"
-        case avatarUrlString = "avatar_url"
-    }
-    
-    init(name: String, avatarUrlString: String) {
-        self.name = name
-        self.avatarUrlString = avatarUrlString
+        case avatarUrlString = "avatarUrl"
     }
 }

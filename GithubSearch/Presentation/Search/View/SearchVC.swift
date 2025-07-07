@@ -9,11 +9,16 @@ import UIKit
 import SnapKit
 import RxSwift
 import RxCocoa
+enum ListSection {
+    case idle
+    case data
+    case empty
+}
 
 class SearchVC: UIViewController {
     
     private let disposeBag = DisposeBag()
-    private let viewModel = SearchVM()
+    private let viewModel: SearchVM
     
     private lazy var searchBar: UISearchBar = {
         let searchBar = UISearchBar()
@@ -26,20 +31,19 @@ class SearchVC: UIViewController {
         let flowLayout = UICollectionViewFlowLayout()
         flowLayout.minimumLineSpacing = 24
         flowLayout.scrollDirection = .vertical
-        let view = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
-        view.register(UserCell.self, forCellWithReuseIdentifier: "cell")
-        view.backgroundColor = .clear
-        view.dataSource = self
-        view.delegate = self
-        view.backgroundView = noDataLabel
-        return view
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
+        cv.register(UserCell.self, forCellWithReuseIdentifier: "cell")
+        cv.delegate = self
+        cv.backgroundView = noDataLabel
+        cv.backgroundColor = .clear
+        return cv
     }()
     
     private lazy var noDataLabel: UILabel = {
         let label = UILabel()
-        label.text = "no users"
+        label.text = "Please Enter KeyWord"
         label.textAlignment = .center
-        label.font = UIFont.systemFont(ofSize: 40)
+        label.font = UIFont.systemFont(ofSize: 20)
         return label
     }()
     
@@ -48,6 +52,23 @@ class SearchVC: UIViewController {
         view.hidesWhenStopped = true
         return view
     }()
+    
+    private lazy var dataSource: UICollectionViewDiffableDataSource = UICollectionViewDiffableDataSource<ListSection, User>(collectionView: collectionView) { collectionView, indexPath, user -> UICollectionViewCell? in
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as? UserCell
+        cell?.configure(with: user)
+        return cell
+    }
+    
+    private var snapshot = NSDiffableDataSourceSnapshot<ListSection, User>()
+    
+    init(viewModel: SearchVM) {
+        self.viewModel = viewModel
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -86,42 +107,55 @@ class SearchVC: UIViewController {
         searchBar.rx
             .text
             .orEmpty
-            .bind(to: viewModel.input.keyword)
+            .bind(to: viewModel.input.queryBinder)
             .disposed(by: disposeBag)
         
         searchBar.rx
             .searchButtonClicked
-            .bind(onNext: { [weak self] in
+            .do(onNext: { [weak self] in
                 self?.view.endEditing(true)
-                self?.viewModel.searchUser()
-            }).disposed(by: disposeBag)
+            })
+            .bind(to: viewModel.input.searchDidTapBinder)
+            .disposed(by: disposeBag)
         
         viewModel.output
-            .reloadData
+            .reloadDriver
             .drive(onNext: { [weak self] in
                 guard let self = self else { return }
-                self.noDataLabel.isHidden = !self.viewModel.output.users.value.isEmpty
+                self.noDataLabel.isHidden = !self.viewModel.usersRelay.value.isEmpty
                 self.collectionView.reloadData()
             }).disposed(by: disposeBag)
         
         viewModel.output
-            .isLoading
+            .isLoadingDriver
             .drive (onNext: { [weak self] isLoading in
-                guard let self = self else { return }
-                self.collectionView.isHidden = isLoading
                 if isLoading {
-                    self.indicatorView.startAnimating()
+                    self?.indicatorView.startAnimating()
                 } else {
-                    self.indicatorView.stopAnimating()
+                    self?.indicatorView.stopAnimating()
                 }
             }).disposed(by: disposeBag)
 
         viewModel.output
-            .showError
+            .showErrorSignal
             .emit(onNext: { [weak self] errorMsg in
                 self?.showErrorAlert(message: errorMsg)
             }).disposed(by: disposeBag)
+        
+        viewModel.output
+            .usersDriver
+            .map({ users -> NSDiffableDataSourceSnapshot<ListSection, User> in
+                var snapshot = NSDiffableDataSourceSnapshot<ListSection, User>()
+                snapshot.appendSections([.data])
+                snapshot.appendItems(users)
+                return snapshot
+            })
+            .drive { [weak self] snapshot in
+                self?.dataSource.apply(snapshot)
+            }
+            .disposed(by: disposeBag) 
     }
+    
     
     private func showErrorAlert(message: String) {
         let alert = UIAlertController(title: "Error!", message: message, preferredStyle: .alert)
@@ -134,7 +168,7 @@ class SearchVC: UIViewController {
 // MARK: - UICollectionViewDelegate
 extension SearchVC: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        if indexPath.row == viewModel.output.users.value.count - 1 {
+        if indexPath.row == viewModel.usersRelay.value.count - 1 {
             viewModel.getNextPage()
         }
     }
@@ -143,20 +177,6 @@ extension SearchVC: UICollectionViewDelegate {
         guard searchBar.isFirstResponder else { return }
         searchBar.resignFirstResponder()
     }
-}
-
-// MARK: - UICollectionViewDataSource
-extension SearchVC: UICollectionViewDataSource {
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return viewModel.output.users.value.count
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath) as! UserCell
-        cell.configure(with: viewModel.output.users.value[indexPath.row])
-        return cell
-    }
-    
 }
 
 // MARK: - UICollectionViewDelegateFlowLayout
